@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>溪口國小42屆體表會 - 班級拔河對抗賽</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            overflow: hidden; /* 防止視窗出現滾動條 */
+        }
+
+        /* --- 科技感標題 --- */
+        #tech-header {
+            width: 100%;
+            text-align: center;
+            padding: 15px 0;
+            background: linear-gradient(to bottom, #000000, #1a1a2e);
+            border-bottom: 2px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            z-index: 20;
+        }
+
+        .tech-text {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #e6ffff;
+            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00aaff;
+            animation: textFlicker 2s infinite alternate;
+        }
+
+        @keyframes textFlicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; text-shadow: 0 0 5px #00ffff, 0 0 15px #00aaff; }
+        }
+
+        /* --- Canvas 容器與覆蓋層 --- */
+        #canvas-container {
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative; 
+            margin-top: 10px;
+        }
+
+        /* 開場覆蓋層 */
+        #start-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); /* 加深一點背景讓文字更清楚 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            flex-direction: column;
+        }
+
+        .start-title {
+            font-size: 40px;
+            color: #ffeb3b;
+            text-shadow: 0 0 10px #ffeb3b;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .start-hint {
+            font-size: 24px;
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid #fff;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse { from { opacity: 0.6; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+
+        canvas {
+            border: 1px solid #333;
+            background-color: #222;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        /* --- 控制與狀態顯示 --- */
+        #controls {
+            padding: 15px;
+            z-index: 10;
+            display: flex;
+            gap: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #333;
+            color: #00ffff;
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+            transition: all 0.3s;
+            font-family: 'Microsoft JhengHei', sans-serif;
+        }
+        
+        button:hover {
+            background-color: #00ffff;
+            color: #000;
+            box-shadow: 0 0 10px #00ffff;
+        }
+        
+        button:active {
+            transform: translateY(2px);
+        }
+
+        #status {
+            font-size: 28px;
+            margin-top: 5px;
+            font-weight: bold;
+            height: 40px;
+            text-align: center;
+            text-shadow: 0 2px 2px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="tech-header">
+        <div class="tech-text">溪口國小42屆體表會</div>
+    </div>
+
+    <div id="status" style="color: #ffeb3b;">準備開始</div>
+
+    <div id="canvas-container">
+        <div id="start-overlay">
+            <div class="start-title">溪口國小42屆體表會拔河比賽<br>按 Space 鍵開始</div>
+            <div style="margin-top:20px; color:#aaa; font-size: 18px;">
+                左方操控：Q 鍵 &nbsp;&nbsp;|&nbsp;&nbsp; 右方操控：P 鍵
+            </div>
+        </div>
+        <canvas id="tugOfWarCanvas" width="1000" height="500"></canvas>
+    </div>
+
+    <div id="controls">
+        <button id="btnLeft">⬅️ 403班加油 (Q)</button>
+        <button id="btnRight">405班加油 (P) ➡️</button>
+        <button id="btnReset">重新一局</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('tugOfWarCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+        const startOverlay = document.getElementById('start-overlay');
+
+        // --- 遊戲參數設定 ---
+        let ropePosition;
+        const winThreshold = 180; 
+        const pullForce = 12; // 稍微增加一點拉力讓回饋感更好
+        let gameState = 'start'; 
+
+        // --- 學生與繩子參數 ---
+        const studentsPerSide = 5;
+        const studentSpacing = 75;
+        const studentRadius = 22;
+        const ropeLengthOneSide = (studentsPerSide - 1) * studentSpacing + 50; 
+        const centerY = canvas.height / 2 + 60; 
+        const baseStudentY = centerY - 35;
+
+        const leftClassName = "403班";
+        const rightClassName = "405班";
+
+        function initGameVars() {
+            ropePosition = canvas.width / 2;
+        }
+        initGameVars();
+
+        // --- 繪圖主函數 ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 地板
+            ctx.fillStyle = '#2a2a2a';
+            ctx.fillRect(0, centerY + 20, canvas.width, canvas.height - centerY - 20);
+
+            drawWinLines();
+            drawClassLabels();
+            drawRope();
+
+            let winningSide = null;
+            if (gameState === 'leftWin') winningSide = 'left';
+            if (gameState === 'rightWin') winningSide = 'right';
+
+            drawStudents('left', winningSide === 'left');
+            drawStudents('right', winningSide === 'right');
+
+            drawRopeKnot();
+        }
+
+        function drawWinLines() {
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = '#ff2222';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff0000';
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2 - winThreshold, centerY - 120);
+            ctx.lineTo(canvas.width / 2 - winThreshold, centerY + 120);
+            ctx.moveTo(canvas.width / 2 + winThreshold, centerY - 120);
+            ctx.lineTo(canvas.width / 2 + winThreshold, centerY + 120);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        function drawClassLabels() {
+            ctx.font = "bold 36px 'Microsoft JhengHei', Arial";
+            ctx.textAlign = "center";
+            ctx.fillStyle = '#4287f5'; 
+            ctx.fillText(leftClassName, canvas.width / 4, 80);
+            ctx.fillStyle = '#f54242'; 
+            ctx.fillText(rightClassName, canvas.width * 3 / 4, 80);
+        }
+
+        function drawRope() {
+            ctx.lineWidth = 12;
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(ropePosition - ropeLengthOneSide, centerY);
+            ctx.lineTo(ropePosition + ropeLengthOneSide, centerY);
+            ctx.stroke();
+        }
+
+        function drawRopeKnot() {
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(ropePosition, centerY, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#ffaaaa';
+            ctx.stroke();
+        }
+
+        function drawStudents(side, isWinningTeam) {
+            const direction = side === 'left' ? -1 : 1;
+            const color = side === 'left' ? '#4287f5' : '#f54242'; 
+
+            for (let i = 0; i < studentsPerSide; i++) {
+                const offsetFromCenter = 50 + (i * studentSpacing);
+                const studentX = ropePosition + (offsetFromCenter * direction);
+                
+                // 動畫邏輯：獲勝時根據時間正弦波跳動
+                let jumpOffset = 0;
+                let armRaised = false;
+                if (isWinningTeam) {
+                    jumpOffset = Math.sin(Date.now() / 150) * 25;
+                    jumpOffset = -Math.abs(jumpOffset); // 只往上跳
+                    armRaised = true;
+                }
+
+                const currentStudentY = baseStudentY + jumpOffset;
+
+                ctx.fillStyle = color;
+                ctx.strokeStyle = '#f0c0a0'; 
+                ctx.lineWidth = 7;
+
+                // 身體
+                ctx.beginPath();
+                ctx.moveTo(studentX, currentStudentY);
+                ctx.lineTo(studentX - 18, currentStudentY + 55); 
+                ctx.lineTo(studentX + 18, currentStudentY + 55); 
+                ctx.fill();
+
+                // 手部
+                ctx.beginPath();
+                ctx.moveTo(studentX, currentStudentY); 
+                if (armRaised) {
+                    // 勝利姿勢：舉手
+                    ctx.lineTo(studentX - 25, currentStudentY - 40); 
+                    ctx.moveTo(studentX, currentStudentY);
+                    ctx.lineTo(studentX + 25, currentStudentY - 40); 
+                } else {
+                    // 拔河姿勢：抓繩
+                    ctx.lineTo(studentX + (15 * direction), centerY); 
+                }
+                ctx.stroke();
+
+                // 頭部
+                ctx.beginPath();
+                ctx.arc(studentX, currentStudentY - studentRadius, studentRadius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                if (isWinningTeam) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(studentX, currentStudentY - studentRadius + 5, 8, 0, Math.PI, false);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function updateGameState() {
+            if (gameState !== 'playing') return;
+
+            if (ropePosition <= canvas.width / 2 - winThreshold) {
+                gameState = 'leftWin';
+                statusDiv.innerHTML = `🎉 恭喜 <span style="color:#4287f5; font-size: 1.2em;">${leftClassName}</span> 獲勝! 🎉`;
+                statusDiv.style.color = 'white';
+            } else if (ropePosition >= canvas.width / 2 + winThreshold) {
+                gameState = 'rightWin';
+                statusDiv.innerHTML = `🎉 恭喜 <span style="color:#f54242; font-size: 1.2em;">${rightClassName}</span> 獲勝! 🎉`;
+                statusDiv.style.color = 'white';
+            }
+        }
+
+        function gameLoop() {
+            updateGameState();
+            draw(); 
+            requestAnimationFrame(gameLoop);
+        }
+
+        function pull(direction) {
+            if (gameState !== 'playing') return;
+            ropePosition += direction * pullForce;
+            ropePosition = Math.max(100, Math.min(canvas.width - 100, ropePosition));
+        }
+
+        function startGame() {
+            if (gameState === 'start') {
+                gameState = 'playing';
+                startOverlay.style.display = 'none';
+                statusDiv.textContent = "比賽開始！請瘋狂連按！";
+                statusDiv.style.color = '#ffeb3b';
+            }
+        }
+
+        function resetGame() {
+            gameState = 'start';
+            initGameVars();
+            startOverlay.style.display = 'flex';
+            statusDiv.textContent = "準備開始";
+            statusDiv.style.color = '#ffeb3b';
+        }
+
+        // --- 事件監聽 (修正鍵盤控制) ---
+
+        document.getElementById('btnLeft').addEventListener('click', () => pull(-1));
+        document.getElementById('btnRight').addEventListener('click', () => pull(1));
+        document.getElementById('btnReset').addEventListener('click', resetGame);
+
+        // 全域鍵盤監聽
+        document.addEventListener('keydown', (e) => {
+            // Space 鍵開始
+            if (e.code === 'Space') {
+                e.preventDefault(); // 防止網頁捲動
+                startGame();
+            }
+
+            // 只有在遊戲進行中才允許拔河
+            if (gameState === 'playing') {
+                // 左方：Q 鍵 (大小寫皆可)
+                if (e.key.toLowerCase() === 'q') {
+                    pull(-1);
+                    // 增加按鈕的視覺回饋 (可選)
+                    document.getElementById('btnLeft').style.backgroundColor = '#00ffff';
+                    document.getElementById('btnLeft').style.color = '#000';
+                    setTimeout(() => {
+                        document.getElementById('btnLeft').style.backgroundColor = '#333';
+                        document.getElementById('btnLeft').style.color = '#00ffff';
+                    }, 100);
+                }
+                
+                // 右方：P 鍵 (大小寫皆可)
+                if (e.key.toLowerCase() === 'p') {
+                    pull(1);
+                    // 增加按鈕的視覺回饋 (可選)
+                    document.getElementById('btnRight').style.backgroundColor = '#00ffff';
+                    document.getElementById('btnRight').style.color = '#000';
+                    setTimeout(() => {
+                        document.getElementById('btnRight').style.backgroundColor = '#333';
+                        document.getElementById('btnRight').style.color = '#00ffff';
+                    }, 100);
+                }
+            }
+        });
+
+        // 啟動遊戲迴圈
+        gameLoop();
+
+    </script>
+</body>
+</html>
